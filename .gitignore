@@ -1,0 +1,36 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Model weights and outputs (large)
+models/
+output/
+
+# RAG vector DB and generated data
+rag/
+data/*.jsonl
+data/rag_documents/
+
+# Keep data directory structure; add sample data or your own
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Optional: uncomment to ignore all data (then add data via Kaggle dataset or clone)
+# data/

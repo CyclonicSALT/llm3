@@ -1,0 +1,79 @@
+# MathStack - Configuration
+# Base model
+base_model: Qwen/Qwen2.5-0.5B-Instruct
+model_cache: ./models/base
+
+# llama.cpp tools from LLM1
+llama_cli: Z:\Cursor\LLM1\llama.cpp\build\bin\Release\llama-cli.exe
+llama_quantize: Z:\Cursor\LLM1\llama.cpp\build\bin\Release\llama-quantize.exe
+llama_convert: Z:\Cursor\LLM1\llama.cpp\convert_hf_to_gguf.py
+
+# Data paths
+train_100: ./data/train_100.jsonl
+train_1000: ./data/train_1000.jsonl
+test_200: ./data/test_200.jsonl
+cot_train: ./data/cot_train.jsonl
+enhanced_train: ./data/enhanced_train.jsonl
+failures_data: ./data/probe_failures.jsonl
+rag_documents: ./data/rag_documents/arithmetic_facts.jsonl
+
+# Model output paths
+probe_output: ./models/probe
+standard_baseline_output: ./models/standard_baseline
+cot_output: ./models/cot
+probe_guided_output: ./models/probe_guided
+moe_output: ./models/moe
+pruned_output: ./models/pruned
+final_output: ./models/final
+output_dir: ./output
+
+# Training settings - CPU optimized
+max_seq_length: 256
+batch_size: 1
+gradient_accumulation: 16
+epochs: 1
+learning_rate: 2.0e-4
+lora_r: 8
+lora_alpha: 16
+use_cpu: true
+dtype: float32
+save_strategy: steps
+save_steps: 5
+save_total_limit: 2
+
+# Per stage sample counts
+probe_train_samples: 100
+standard_baseline_samples: 1000
+stage1_cot_samples: 100
+stage2_targeted_samples: 100
+stage3_moe_samples: 100
+stage4_prune_samples: 100
+stage5_qat_samples: 100
+targeted_examples_per_gap: 20
+difficulty_levels: 3
+
+# MoE settings
+num_experts: 4
+experts_per_token: 2
+expert_categories:
+  - addition
+  - subtraction
+  - multiplication
+  - division_and_mixed
+
+# Pruning settings
+pruning_target_sparsity: 0.3
+preserve_attention: true
+
+# QAT settings
+qat_bits: 4
+qat_calibration_samples: 200
+
+# RAG settings
+rag_db_path: ./rag/chroma_db
+rag_embedding_model: all-MiniLM-L6-v2
+rag_top_k: 3
+rag_chunk_size: 256
+
+# Scoring
+correct_requires_exact_match: true

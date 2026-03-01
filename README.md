@@ -62,13 +62,20 @@ The project is set up to **use GPU only when running on Kaggle**. Locally it kee
 **On Kaggle:**
 
 1. Create a new Notebook; turn **Internet** on and set **Accelerator** to **GPU (P100)** in Settings.
-2. Upload or clone the LLM3 project (e.g. add as dataset or clone from git).
-3. Install deps and run your script from the project root (so `device_utils` and `config.yaml` are found). Example:
+2. Clone the repo (private repo: add your SSH key to Kaggle, or use a Personal Access Token):
+   ```bash
+   git clone https://github.com/CyclonicSALT/llm3.git
+   cd llm3
+   ```
+   For a **private** repo, use: `git clone https://<YOUR_GITHUB_TOKEN>@github.com/CyclonicSALT/llm3.git` (store the token in a Kaggle Secret and use it in the clone URL).
+3. Add your training data into `data/` (e.g. `train_100.jsonl`) or generate it with `python data/generate_arithmetic.py`; then run from the project root.
+4. Install deps and run your script from the project root (so `device_utils` and `config.yaml` are found). Example:
    ```bash
    pip install -r requirements.txt
    python scripts/train_model.py --data data/train_100.jsonl --output models/my_run
    ```
-4. At startup you should see e.g. `Using GPU: Tesla P100-PCIE-16GB [Kaggle]`.
+5. At startup you should see e.g. `Using GPU: Tesla P100-PCIE-16GB [Kaggle]`.  
+   **Note:** `config.yaml` includes Windows paths for llama.cpp (GGUF export); on Kaggle you can skip export or override those paths. Training and pruning run without them.
 
 **Fall back to CPU on Kaggle:** if the GPU path causes issues, force CPU with:
 

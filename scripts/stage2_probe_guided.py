@@ -14,6 +14,7 @@ import yaml
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Same generators as data/generate_arithmetic.py (simplified inline for targeted types)
 def _gen_addition_with_carrying(rng, count):
@@ -129,17 +130,40 @@ def main():
 
     # Phase A: Evaluate probe if we don't have scores yet
     if not probe_scores_path.exists():
-        if not probe_gguf.exists():
-            print("Probe GGUF not found. Run pipeline step 1 first (train probe + export_gguf).")
-            sys.exit(1)
-        print("Phase A: Evaluating probe on test set...")
-        subprocess.run([
-            sys.executable,
-            SCRIPT_DIR / "evaluate_model.py",
-            "--gguf", str(probe_gguf),
-            "--output", str(probe_scores_path),
-            "--stage", "probe",
-        ], cwd=PROJECT_ROOT, check=True)
+        probe_model_path = PROJECT_ROOT / "models" / "probe"
+        if probe_gguf.exists():
+            print("Phase A: Evaluating probe (GGUF) on test set...")
+            subprocess.run([
+                sys.executable,
+                SCRIPT_DIR / "evaluate_model.py",
+                "--gguf", str(probe_gguf),
+                "--output", str(probe_scores_path),
+                "--stage", "probe",
+            ], cwd=PROJECT_ROOT, check=True)
+        elif (probe_model_path / "adapter_config.json").exists() or (probe_model_path / "config.json").exists():
+            print("Phase A: Evaluating probe (HuggingFace) on test set (no GGUF)...")
+            subprocess.run([
+                sys.executable,
+                SCRIPT_DIR / "evaluate_model_hf.py",
+                "--model", str(probe_model_path),
+                "--output", str(probe_scores_path),
+                "--stage", "probe",
+            ], cwd=PROJECT_ROOT, check=True)
+        else:
+            # Try models/cot as probe (user may have trained there first)
+            cot_path = PROJECT_ROOT / "models" / "cot"
+            if (cot_path / "adapter_config.json").exists():
+                print("Phase A: Evaluating probe using models/cot (HuggingFace)...")
+                subprocess.run([
+                    sys.executable,
+                    SCRIPT_DIR / "evaluate_model_hf.py",
+                    "--model", str(cot_path),
+                    "--output", str(probe_scores_path),
+                    "--stage", "probe",
+                ], cwd=PROJECT_ROOT, check=True)
+            else:
+                print("Probe GGUF not found and no models/probe or models/cot. Run: train_model.py --data data/train_100.jsonl --output models/probe")
+                sys.exit(1)
 
     with open(probe_scores_path, "r", encoding="utf-8") as f:
         probe_data = json.load(f)
@@ -235,23 +259,34 @@ def main():
         "--samples", str(min(samples, len(combined))),
     ], cwd=PROJECT_ROOT, check=True)
 
-    print("Exporting to GGUF...")
-    subprocess.run([
-        sys.executable,
-        SCRIPT_DIR / "export_gguf.py",
-        "--model", str(probe_guided_output),
-        "--name", "stage2-probe-guided",
-    ], cwd=PROJECT_ROOT, check=True)
-
-    gguf_path = output_dir / "stage2-probe-guided-q4.gguf"
     scores_path = output_dir / "stage2_probe_guided_scores.json"
-    subprocess.run([
-        sys.executable,
-        SCRIPT_DIR / "evaluate_model.py",
-        "--gguf", str(gguf_path),
-        "--output", str(scores_path),
-        "--stage", "stage2_probe_guided",
-    ], cwd=PROJECT_ROOT, check=True)
+    from device_utils import is_kaggle
+    gguf_path = output_dir / "stage2-probe-guided-q4.gguf"
+    if not is_kaggle():
+        print("Exporting to GGUF...")
+        ret = subprocess.run([
+            sys.executable,
+            SCRIPT_DIR / "export_gguf.py",
+            "--model", str(probe_guided_output),
+            "--name", "stage2-probe-guided",
+        ], cwd=PROJECT_ROOT)
+        if ret.returncode == 0 and gguf_path.exists():
+            subprocess.run([
+                sys.executable,
+                SCRIPT_DIR / "evaluate_model.py",
+                "--gguf", str(gguf_path),
+                "--output", str(scores_path),
+                "--stage", "stage2_probe_guided",
+            ], cwd=PROJECT_ROOT, check=True)
+    if not scores_path.exists():
+        print("Evaluating with HuggingFace model (no GGUF on Kaggle)...")
+        subprocess.run([
+            sys.executable,
+            SCRIPT_DIR / "evaluate_model_hf.py",
+            "--model", str(probe_guided_output),
+            "--output", str(scores_path),
+            "--stage", "stage2_probe_guided",
+        ], cwd=PROJECT_ROOT, check=True)
 
     with open(probe_scores_path, "r", encoding="utf-8") as f:
         probe_acc = json.load(f).get("overall_accuracy", 0)

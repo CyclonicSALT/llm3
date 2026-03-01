@@ -61,21 +61,23 @@ The project is set up to **use GPU only when running on Kaggle**. Locally it kee
 
 **On Kaggle:**
 
-1. Create a new Notebook; turn **Internet** on and set **Accelerator** to **GPU (P100)** in Settings.
-2. Clone the repo (private repo: add your SSH key to Kaggle, or use a Personal Access Token):
+1. **New Notebook** → Settings: **Internet** = On, **Accelerator** = **GPU (P100)**.
+2. **Add your dataset** (right sidebar → “Add data” → pick your dataset). It will be at `/kaggle/input/<your-dataset-slug>/`.
+3. **Clone the repo and wire in the data** (run in a notebook cell or in the notebook’s “Console” / terminal):
    ```bash
    git clone https://github.com/CyclonicSALT/llm3.git
    cd llm3
-   ```
-   For a **private** repo, use: `git clone https://<YOUR_GITHUB_TOKEN>@github.com/CyclonicSALT/llm3.git` (store the token in a Kaggle Secret and use it in the clone URL).
-3. Add your training data into `data/` (e.g. `train_100.jsonl`) or generate it with `python data/generate_arithmetic.py`; then run from the project root.
-4. Install deps and run your script from the project root (so `device_utils` and `config.yaml` are found). Example:
-   ```bash
+   # Replace YOUR_DATASET_SLUG with your dataset’s URL slug (e.g. my-llm3-data)
+   cp -r /kaggle/input/YOUR_DATASET_SLUG/* data/  2>/dev/null || cp /kaggle/input/YOUR_DATASET_SLUG/*.jsonl data/
    pip install -r requirements.txt
+   ```
+4. **Run from project root** (so `device_utils` and `config.yaml` are found). Example – single training run:
+   ```bash
    python scripts/train_model.py --data data/train_100.jsonl --output models/my_run
    ```
-5. At startup you should see e.g. `Using GPU: Tesla P100-PCIE-16GB [Kaggle]`.  
-   **Note:** `config.yaml` includes Windows paths for llama.cpp (GGUF export); on Kaggle you can skip export or override those paths. Training and pruning run without them.
+   On Kaggle (Linux) run the **Python scripts** directly; the full pipeline script is PowerShell for local use. Run one stage at a time, e.g. `python scripts/train_model.py --data data/train_100.jsonl --output models/cot`.
+5. You should see e.g. `Using GPU: Tesla P100-PCIE-16GB [Kaggle]`.  
+   **Note:** `config.yaml` uses Windows paths for llama.cpp (GGUF export); on Kaggle you can skip export or override those. Training and pruning run without them.
 
 **Fall back to CPU on Kaggle:** if the GPU path causes issues, force CPU with:
 

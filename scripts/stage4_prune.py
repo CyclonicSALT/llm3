@@ -148,24 +148,27 @@ def main():
     trainer.save_model(str(pruned_output))
     tokenizer.save_pretrained(str(pruned_output))
 
-    print("Exporting pruned model to GGUF...")
-    subprocess.run([
-        sys.executable,
-        SCRIPT_DIR / "export_gguf.py",
-        "--model", str(pruned_output),
-        "--name", "stage4-pruned",
-    ], cwd=PROJECT_ROOT, check=True)
-
     scores_path = output_dir / "stage4_pruned_scores.json"
     gguf_path = output_dir / "stage4-pruned-q4.gguf"
-    if gguf_path.exists():
+    from device_utils import is_kaggle
+    if not is_kaggle():
+        print("Exporting pruned model to GGUF...")
+        ret = subprocess.run([
+            sys.executable, SCRIPT_DIR / "export_gguf.py",
+            "--model", str(pruned_output), "--name", "stage4-pruned",
+        ], cwd=PROJECT_ROOT)
+        if ret.returncode == 0 and gguf_path.exists():
+            subprocess.run([
+                sys.executable, SCRIPT_DIR / "evaluate_model.py",
+                "--gguf", str(gguf_path), "--output", str(scores_path), "--stage", "stage4_pruned",
+            ], cwd=PROJECT_ROOT, check=True)
+    if not scores_path.exists():
+        print("Evaluating pruned model (HuggingFace, no GGUF)...")
         subprocess.run([
-            sys.executable,
-            SCRIPT_DIR / "evaluate_model.py",
-            "--gguf", str(gguf_path),
-            "--output", str(scores_path),
-            "--stage", "stage4_pruned",
+            sys.executable, SCRIPT_DIR / "evaluate_model_hf.py",
+            "--model", str(pruned_output), "--output", str(scores_path), "--stage", "stage4_pruned",
         ], cwd=PROJECT_ROOT, check=True)
+    if scores_path.exists():
         with open(scores_path, "r", encoding="utf-8") as f:
             acc = json.load(f).get("overall_accuracy", 0)
         print(f"Score after pruning + recovery: {acc:.1f}%")

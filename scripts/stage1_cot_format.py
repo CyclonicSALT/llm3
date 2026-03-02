@@ -162,34 +162,39 @@ def main():
     if ret.returncode != 0:
         sys.exit(1)
 
-    # Export GGUF
-    print("Exporting to GGUF...")
-    ret = subprocess.run([
-        sys.executable,
-        SCRIPT_DIR / "export_gguf.py",
-        "--model", str(cot_output),
-        "--name", "stage1-cot",
-    ], cwd=PROJECT_ROOT)
-    if ret.returncode != 0:
-        sys.exit(1)
-
-    gguf_path = output_dir / "stage1-cot-q4.gguf"
-    if not gguf_path.exists():
-        print("GGUF not found at expected path.")
-        sys.exit(1)
-
-    # Evaluate
-    print("Evaluating on test set...")
+    # Export GGUF (skip on Kaggle; use HF eval instead)
     scores_path = output_dir / "stage1_cot_scores.json"
-    ret = subprocess.run([
-        sys.executable,
-        SCRIPT_DIR / "evaluate_model.py",
-        "--gguf", str(gguf_path),
-        "--output", str(scores_path),
-        "--stage", "stage1_cot",
-    ], cwd=PROJECT_ROOT)
-    if ret.returncode != 0:
-        sys.exit(1)
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from device_utils import is_kaggle
+    gguf_path = output_dir / "stage1-cot-q4.gguf"
+    if not is_kaggle():
+        print("Exporting to GGUF...")
+        ret = subprocess.run([
+            sys.executable,
+            SCRIPT_DIR / "export_gguf.py",
+            "--model", str(cot_output),
+            "--name", "stage1-cot",
+        ], cwd=PROJECT_ROOT)
+        if ret.returncode == 0 and gguf_path.exists():
+            print("Evaluating on test set (GGUF)...")
+            ret = subprocess.run([
+                sys.executable,
+                SCRIPT_DIR / "evaluate_model.py",
+                "--gguf", str(gguf_path),
+                "--output", str(scores_path),
+                "--stage", "stage1_cot",
+            ], cwd=PROJECT_ROOT)
+    if not scores_path.exists():
+        print("Evaluating on test set (HuggingFace, no GGUF)...")
+        ret = subprocess.run([
+            sys.executable,
+            SCRIPT_DIR / "evaluate_model_hf.py",
+            "--model", str(cot_output),
+            "--output", str(scores_path),
+            "--stage", "stage1_cot",
+        ], cwd=PROJECT_ROOT)
+        if ret.returncode != 0:
+            sys.exit(1)
 
     # Load probe scores for comparison (if available)
     probe_path = output_dir / "probe_scores.json"

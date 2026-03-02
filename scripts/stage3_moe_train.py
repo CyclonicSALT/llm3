@@ -115,28 +115,29 @@ def main():
             "--samples", str(len(subset)),
         ], cwd=PROJECT_ROOT, check=True)
 
-    # Export: use probe_guided as base and merge best expert (we use addition as default merge for single GGUF)
-    # For true MoE inference we use moe_inference.py; for a single GGUF we export one expert.
-    export_model = moe_output / "expert_addition"  # default representative
-    print("Exporting MoE representative (expert_addition) to GGUF...")
-    subprocess.run([
-        sys.executable,
-        SCRIPT_DIR / "export_gguf.py",
-        "--model", str(export_model),
-        "--name", "stage3-moe",
-    ], cwd=PROJECT_ROOT, check=True)
-
-    # Evaluate: for simplicity we evaluate the exported single expert; full MoE would use moe_inference
+    export_model = moe_output / "expert_addition"
     gguf_path = output_dir / "stage3-moe-q4.gguf"
     scores_path = output_dir / "stage3_moe_scores.json"
-    if gguf_path.exists():
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from device_utils import is_kaggle
+    if not is_kaggle():
+        print("Exporting MoE representative (expert_addition) to GGUF...")
+        ret = subprocess.run([
+            sys.executable, SCRIPT_DIR / "export_gguf.py",
+            "--model", str(export_model), "--name", "stage3-moe",
+        ], cwd=PROJECT_ROOT)
+        if ret.returncode == 0 and gguf_path.exists():
+            subprocess.run([
+                sys.executable, SCRIPT_DIR / "evaluate_model.py",
+                "--gguf", str(gguf_path), "--output", str(scores_path), "--stage", "stage3_moe",
+            ], cwd=PROJECT_ROOT, check=True)
+    if not scores_path.exists():
+        print("Evaluating MoE (HuggingFace, no GGUF)...")
         subprocess.run([
-            sys.executable,
-            SCRIPT_DIR / "evaluate_model.py",
-            "--gguf", str(gguf_path),
-            "--output", str(scores_path),
-            "--stage", "stage3_moe",
+            sys.executable, SCRIPT_DIR / "evaluate_model_hf.py",
+            "--model", str(export_model), "--output", str(scores_path), "--stage", "stage3_moe",
         ], cwd=PROJECT_ROOT, check=True)
+    if scores_path.exists():
         with open(scores_path, "r", encoding="utf-8") as f:
             acc = json.load(f).get("overall_accuracy", 0)
         print(f"Stage 3 MoE (representative expert) accuracy: {acc:.1f}%")

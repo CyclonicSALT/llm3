@@ -103,31 +103,33 @@ def main():
     trainer.save_model(str(final_output))
     tokenizer.save_pretrained(str(final_output))
 
-    print("Exporting final model to GGUF (Q4_K_M)...")
-    subprocess.run([
-        sys.executable,
-        SCRIPT_DIR / "export_gguf.py",
-        "--model", str(final_output),
-        "--name", "mathstack-final",
-    ], cwd=PROJECT_ROOT, check=True)
-
-    # Copy/move final GGUF to output/mathstack-final-q4.gguf (export_gguf already writes there)
     scores_path = output_dir / "stage5_qat_scores.json"
     gguf_path = output_dir / "mathstack-final-q4.gguf"
-    if gguf_path.exists():
+    import sys
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from device_utils import is_kaggle
+    if not is_kaggle():
+        print("Exporting final model to GGUF (Q4_K_M)...")
+        ret = subprocess.run([
+            sys.executable, SCRIPT_DIR / "export_gguf.py",
+            "--model", str(final_output), "--name", "mathstack-final",
+        ], cwd=PROJECT_ROOT)
+        if ret.returncode == 0 and gguf_path.exists():
+            subprocess.run([
+                sys.executable, SCRIPT_DIR / "evaluate_model.py",
+                "--gguf", str(gguf_path), "--output", str(scores_path), "--stage", "stage5_qat",
+            ], cwd=PROJECT_ROOT, check=True)
+    if not scores_path.exists():
+        print("Evaluating final model (HuggingFace, no GGUF)...")
         subprocess.run([
-            sys.executable,
-            SCRIPT_DIR / "evaluate_model.py",
-            "--gguf", str(gguf_path),
-            "--output", str(scores_path),
-            "--stage", "stage5_qat",
+            sys.executable, SCRIPT_DIR / "evaluate_model_hf.py",
+            "--model", str(final_output), "--output", str(scores_path), "--stage", "stage5_qat",
         ], cwd=PROJECT_ROOT, check=True)
+    if scores_path.exists():
         with open(scores_path, "r", encoding="utf-8") as f:
             acc = json.load(f).get("overall_accuracy", 0)
-        print("Standard quantization accuracy loss: typically 3-8%")
-        print("QAT quantization accuracy loss: typically 1-3%")
-        print(f"Your result: see stage5_qat_scores.json -> {acc:.1f}%")
-    print("Stage 5 complete. Final model: output/mathstack-final-q4.gguf")
+        print("QAT result: see stage5_qat_scores.json ->", acc, "%")
+    print("Stage 5 complete. Final model: models/final (HF) or output/mathstack-final-q4.gguf (if GGUF exported).")
 
 
 if __name__ == "__main__":
